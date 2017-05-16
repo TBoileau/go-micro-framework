@@ -3,6 +3,7 @@ package framework
 import (
 	"net/http"
 	"reflect"
+	"regexp"
 
 	"github.com/gorilla/mux"
 )
@@ -26,11 +27,16 @@ func (r *Route) Handle(router *mux.Router) {
 		controller := server.Bundles[route.Parent.Bundle][route.Controller]
 		controller.Elem().FieldByName("ResponseWriter").Set(reflect.ValueOf(response))
 		controller.Elem().FieldByName("Request").Set(reflect.ValueOf(request))
-
-		arguments := []reflect.Value{}
-		for _, arg := range mux.Vars(request) {
-			arguments = append(arguments, reflect.ValueOf(arg))
+		controller.Elem().FieldByName("Server").Set(reflect.ValueOf(&server))
+		re := regexp.MustCompile(`{(\w*)}*`)
+		i := 0
+		method := controller.Elem().MethodByName(route.Action)
+		in := make([]reflect.Value, method.Type().NumIn())
+		vars := mux.Vars(request)
+		for _, group := range re.FindAllStringSubmatch(path, -1) {
+			in[i] = reflect.ValueOf(vars[group[1]])
+			i++
 		}
-		controller.MethodByName(route.Action).Call(arguments)
+		method.Call(in)
 	})
 }

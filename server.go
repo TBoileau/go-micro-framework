@@ -17,13 +17,16 @@ type Server struct {
 	ProjectPath string
 	Config      struct {
 		StaticDic     string `yaml:"static_dir"`
+		StaticPath    string `yaml:"static_path"`
 		Port          string `yaml:"port"`
 		RoutingPrefix string `yaml:"routing_prefix"`
 		RoutingPath   string `yaml:"routing_path"`
 		SourcesPath   string `yaml:"src_path"`
 	} `yaml:"framework"`
-	Bundles map[string]map[string]reflect.Value
-	Routing map[string]Route
+	Parameters  interface{}
+	Bundles     map[string]map[string]reflect.Value
+	Middlewares map[string]reflect.Value
+	Routing     map[string]Route
 }
 
 var server Server
@@ -32,6 +35,7 @@ func (server *Server) Initialize() {
 	server.ProjectPath, _ = os.Getwd()
 	server.Routing = make(map[string]Route)
 	server.Bundles = make(map[string]map[string]reflect.Value)
+	server.Middlewares = make(map[string]reflect.Value)
 	server.LoadConfig()
 	server.LoadRouting(Route{
 		Resource: server.Config.RoutingPath,
@@ -39,20 +43,34 @@ func (server *Server) Initialize() {
 	})
 }
 
-func Run(bundles ...BundleInterface) *Server {
+func CreateServer() *Server {
 	server.Initialize()
+	return &server
+}
+
+func (server *Server) RegisterBundles(bundles ...BundleInterface) {
 	for _, bundle := range bundles {
 		server.Bundles[bundle.GetName()] = bundle.Register()
 	}
+}
+
+func (server *Server) RegisterMiddlewares(middlewares ...MiddlewareInterface) {
+	for _, middleware := range middlewares {
+		server.Middlewares[middleware.GetName()] = middleware.Register()
+	}
+}
+
+func (server *Server) Run() {
 	serv := negroni.Classic()
 	mx := mux.NewRouter()
 	for _, route := range server.Routing {
 		route.Handle(mx)
 	}
-	mx.PathPrefix("/").Handler(http.FileServer(http.Dir(server.Config.StaticDic)))
+	if err := server.Config.StaticDic; err != "" {
+		mx.PathPrefix(server.Config.StaticPath).Handler(http.FileServer(http.Dir(server.Config.StaticDic)))
+	}
 	serv.UseHandler(mx)
 	serv.Run(":" + server.Config.Port)
-	return &server
 }
 
 func (server *Server) LoadConfig() {

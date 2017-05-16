@@ -11,6 +11,11 @@ import (
 type Controller struct {
 	Request        *http.Request
 	ResponseWriter http.ResponseWriter
+	Server         *Server
+}
+
+func (controller Controller) GetMiddleware(middleware string) interface{} {
+	return controller.Server.Middlewares[middleware].Interface()
 }
 
 func (controller Controller) Get() map[string]string {
@@ -22,6 +27,7 @@ func (controller Controller) Post() map[string]string {
 }
 
 func (controller Controller) Json(data interface{}) {
+	controller.ResponseWriter.Header().Set("Access-Control-Allow-Origin", "*")
 	json.NewEncoder(controller.ResponseWriter).Encode(data)
 }
 
